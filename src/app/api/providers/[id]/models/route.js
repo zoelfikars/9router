@@ -16,6 +16,10 @@ import { resolveClineModels, resolveClinepassModels } from "open-sse/services/cl
 import { NOUS_MODELS_URL, normalizeNousModels } from "open-sse/services/nous.js";
 import codexProvider from "open-sse/providers/registry/codex.js";
 
+// Command Code publishes its live catalog (OpenAI-style, ids already in the
+// `provider/model` form the executor expects) on a public, unauthenticated route.
+const COMMANDCODE_MODELS_URL = `${(process.env.COMMAND_CODE_API_BASE_URL || "https://api.commandcode.ai").replace(/\/$/, "")}/provider/v1/models`;
+
 const GEMINI_CLI_MODELS_URL = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
 
 // Model discovery must identify as the same Codex CLI version as inference.
@@ -422,6 +426,28 @@ const PROVIDER_MODELS_CONFIG = {
       return {
         models: getStaticProviderModels("clinepass"),
         warning: "ClinePass returned no live models; falling back to static catalog.",
+      };
+    },
+  },
+
+  commandcode: {
+    customResolver: async (connection) => {
+      try {
+        const headers = { "Content-Type": "application/json" };
+        if (connection.apiKey) headers.Authorization = `Bearer ${connection.apiKey}`;
+        const response = await fetch(COMMANDCODE_MODELS_URL, { method: "GET", headers });
+        if (response.ok) {
+          const models = parseOpenAIStyleModels(await response.json())
+            .filter((m) => m?.id)
+            .map((m) => ({ ...m, name: m.name || m.id }));
+          if (models.length) return { models };
+        }
+      } catch (error) {
+        console.log("Error fetching Command Code models:", error);
+      }
+      return {
+        models: getStaticProviderModels("commandcode"),
+        warning: "Command Code returned no live models; falling back to static catalog.",
       };
     },
   },

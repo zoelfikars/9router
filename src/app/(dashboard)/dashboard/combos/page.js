@@ -1241,13 +1241,32 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   };
 
   const handleAddModel = (model) => {
-    if (!models.includes(model.value)) {
-      setModels([...models, model.value]);
-    }
+    setModels((prev) => (prev.includes(model.value) ? prev : [...prev, model.value]));
   };
 
   const handleDeselectModel = (model) => {
-    setModels(models.filter((m) => m !== model.value));
+    setModels((prev) => prev.filter((m) => m !== model.value));
+  };
+
+  // Batch variants use the functional form so several models added in one tick
+  // (Select All, bulk add by ID) are not lost to a stale `models` closure.
+  const handleAddBatch = (batch, opts) => {
+    setModels((prev) => {
+      // Bulk add by ID: strictly follow the typed order. Matches already in the
+      // combo are pulled out of their old slot and re-appended in that order.
+      if (opts?.ordered?.length) {
+        const values = opts.ordered.map((m) => m.value);
+        return [...prev.filter((m) => !values.includes(m)), ...values];
+      }
+      const next = [...prev];
+      for (const m of batch) if (!next.includes(m.value)) next.push(m.value);
+      return next;
+    });
+  };
+
+  const handleDeselectBatch = (batch) => {
+    const drop = new Set(batch.map((m) => m.value));
+    setModels((prev) => prev.filter((m) => !drop.has(m)));
   };
 
   const handleRemoveModel = (index) => {
@@ -1301,7 +1320,20 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
 
           {/* Models */}
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Models</label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-sm font-medium">Models{models.length > 0 ? ` (${models.length})` : ""}</label>
+              {models.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setModels([])}
+                  className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 transition-colors"
+                  title="Remove all models from this combo"
+                >
+                  <span className="material-symbols-outlined text-[14px]">delete_sweep</span>
+                  Remove all
+                </button>
+              )}
+            </div>
 
             {models.length === 0 ? (
               <div className="text-center py-4 border border-dashed border-black/10 dark:border-white/10 rounded-lg bg-black/[0.01] dark:bg-white/[0.01]">
@@ -1369,6 +1401,8 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
           onClose={() => setShowModelSelect(false)}
           onSelect={handleAddModel}
           onDeselect={handleDeselectModel}
+          onSelectBatch={handleAddBatch}
+          onDeselectBatch={handleDeselectBatch}
           activeProviders={activeProviders}
           modelAliases={modelAliases}
           title="Add Model to Combo"

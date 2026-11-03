@@ -92,6 +92,9 @@ export default function ModelSelectModal({
 }) {
   // Live-fetched connections on modal open, fallback to activeProviders prop
   const [fetchedConnections, setFetchedConnections] = useState(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkResult, setBulkResult] = useState(null);
 
   const fetchConnections = async () => {
     try {
@@ -581,6 +584,45 @@ export default function ModelSelectModal({
     return visibleModels.filter((m) => addedModelValues.includes(m.value));
   }, [visibleModels, addedModelValues]);
 
+  // Bulk add by id: tokens may be full values (provider/model) or bare model ids.
+  // Anything that does not match a selectable model is ignored.
+  const handleBulkAddByIds = () => {
+    const tokens = [...new Set(bulkText.split(/[\s,;]+/).map((t) => t.replace(/^["'`]+|["'`]+$/g, "")).filter(Boolean))];
+    if (tokens.length === 0) return;
+    const pool = Object.values(groupedModels).flatMap((g) => g.models)
+      .filter((m) => m?.value && m.value.includes("/") && !m.value.endsWith("/model-id"));
+    const byValue = new Map();
+    const byId = new Map();
+    for (const m of pool) {
+      const v = m.value.toLowerCase();
+      if (!byValue.has(v)) byValue.set(v, m);
+      const id = String(m.id || "").toLowerCase();
+      if (id && !byId.has(id)) byId.set(id, m);
+    }
+    const toAdd = [];
+    const ordered = []; // every matched model, in exactly the order typed
+    const ignored = [];
+    let already = 0;
+    for (const token of tokens) {
+      const key = token.toLowerCase();
+      const match = byValue.get(key) || byId.get(key);
+      if (!match) { ignored.push(token); continue; }
+      if (ordered.some((m) => m.value === match.value)) { already += 1; continue; }
+      ordered.push(match);
+      if (addedModelValues.includes(match.value)) { already += 1; continue; }
+      toAdd.push(match);
+    }
+    if (ordered.length) {
+      // Second arg lets order-aware callers (combo) place all matches, including
+      // ones already selected, strictly in typed order.
+      if (onSelectBatch) onSelectBatch(toAdd, { ordered });
+      else toAdd.forEach((m) => onSelect(m));
+    }
+    setBulkResult({ added: toAdd.length, already, ignored });
+    if (ignored.length === 0) setBulkText("");
+    else setBulkText(ignored.join("\n"));
+  };
+
   const handleSelectAllVisible = () => {
     if (visibleUnadded.length === 0) return;
     if (onSelectBatch) {
@@ -677,6 +719,45 @@ export default function ModelSelectModal({
             )}
           </div>
         </div>
+
+        {!closeOnSelect && (
+          <div className="px-1">
+            <button
+              type="button"
+              onClick={() => setBulkOpen((v) => !v)}
+              className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[14px] leading-none">{bulkOpen ? "expand_less" : "playlist_add"}</span>
+              Bulk add by ID
+            </button>
+            {bulkOpen && (
+              <div className="mt-1.5 space-y-1.5">
+                <textarea
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                  rows={4}
+                  placeholder={"Satu ID per baris / dipisah koma.\nContoh: cmc/deepseek/deepseek-v4-pro atau deepseek/deepseek-v4-pro"}
+                  className="w-full px-2 py-1.5 bg-surface border border-border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleBulkAddByIds}
+                    disabled={!bulkText.trim()}
+                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Add IDs
+                  </button>
+                  {bulkResult && (
+                    <span className="text-[11px] text-text-muted">
+                      {bulkResult.added} ditambah{bulkResult.already ? `, ${bulkResult.already} sudah ada` : ""}{bulkResult.ignored.length ? `, ${bulkResult.ignored.length} diabaikan (tidak ditemukan)` : ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {!closeOnSelect && visibleModels.length > 0 && (
           <div className="flex items-center justify-between px-1 text-[11px] text-text-muted">

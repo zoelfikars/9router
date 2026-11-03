@@ -68,6 +68,10 @@ export default function ProviderDetailPage() {
   const [modelTestResults, setModelTestResults] = useState({});
   const [modelsTestError, setModelsTestError] = useState("");
   const [testingModelIds, setTestingModelIds] = useState(() => new Set());
+  const [modelTestErrors, setModelTestErrors] = useState({});
+  const [testingAllModels, setTestingAllModels] = useState(false);
+  const [testAllProgress, setTestAllProgress] = useState(null);
+  const [testAllNote, setTestAllNote] = useState("");
   const [showAddCustomModel, setShowAddCustomModel] = useState(false);
   const [selectedConnectionIds, setSelectedConnectionIds] = useState([]);
   const [bulkProxyPoolId, setBulkProxyPoolId] = useState("__none__");
@@ -654,11 +658,12 @@ export default function ProviderDetailPage() {
   };
   // Fetch the live Cline /models catalog and add every model not yet present.
   // Cline and ClinePass share the same catalog endpoint (api.cline.bot/api/v1/models).
+  // Command Code reuses this handler via its public /provider/v1/models catalog.
   const handleImportClineModels = async () => {
     if (importingClineModels) return;
     const activeConnection = connections.find((conn) => conn.isActive !== false);
     if (!activeConnection) {
-      alert(translate("Please add an active Cline connection first"));
+      alert(translate("Please add an active connection first"));
       return;
     }
     setImportingClineModels(true);
@@ -1142,9 +1147,10 @@ export default function ProviderDetailPage() {
     </Modal>
   );
 
-  const handleTestModel = async (modelId) => {
-    if (testingModelIds.has(modelId)) return;
+  const handleTestModel = async (modelId, { quiet = false } = {}) => {
+    if (testingModelIds.has(modelId)) return null;
     setTestingModelIds((prev) => new Set(prev).add(modelId));
+    let result;
     try {
       const res = await fetch("/api/models/test", {
         method: "POST",
@@ -1152,13 +1158,86 @@ export default function ProviderDetailPage() {
         body: JSON.stringify({ model: `${providerStorageAlias}/${modelId}` }),
       });
       const data = await res.json();
-      setModelTestResults((prev) => ({ ...prev, [modelId]: data.ok ? "ok" : "error" }));
-      setModelsTestError(data.ok ? "" : (data.error || "Model not reachable"));
+      result = { ok: !!data.ok, error: data.ok ? "" : (data.error || "Model not reachable"), status: data.status };
     } catch {
-      setModelTestResults((prev) => ({ ...prev, [modelId]: "error" }));
-      setModelsTestError("Network error");
+      result = { ok: false, error: "Network error" };
     } finally {
       setTestingModelIds((prev) => { const n = new Set(prev); n.delete(modelId); return n; });
+    }
+    setModelTestResults((prev) => ({ ...prev, [modelId]: result.ok ? "ok" : "error" }));
+    setModelTestErrors((prev) => ({ ...prev, [modelId]: result.ok ? null : { error: result.error, status: result.status } }));
+    if (!quiet) setModelsTestError(result.ok ? "" : result.error);
+    return result;
+  };
+
+  // A failure caused by a timeout / transient upstream problem says nothing about
+  // access, so those models are kept. Anything else (401/403/404/400, plan or
+  // "model not found" errors, ...) means the account cannot use the model.
+  const isTransientFailure = (r) => {
+    if (!r || r.ok) return false;
+    if ([408, 425, 429, 500, 502, 503, 504].includes(r.status)) return true;
+    return /timeout|timed out|aborted|ETIMEDOUT|ECONNRESET|ECONNREFUSED|network error|fetch failed|rate limit/i.test(r.error || "");
+  };
+
+  // Test every model of this provider (built-in + imported/custom) with a small
+  // worker pool, then drop the ones the account has no access to:
+  // custom/alias models are deleted, built-in ones are disabled.
+  const handleTestAllModels = async (rows) => {
+    if (testingAllModels || rows.length === 0) return;
+    setTestingAllModels(true);
+    setModelTestErrors({});
+    setModelsTestError("");
+    setTestAllNote("");
+    setTestAllProgress({ done: 0, total: rows.length });
+    const results = new Map();
+    const queue = [...rows];
+    const worker = async () => {
+      while (queue.length) {
+        const row = queue.shift();
+        results.set(row.id, await handleTestModel(row.id, { quiet: true }));
+        setTestAllProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: Math.min(4, rows.length) }, worker));
+
+      const failedRows = rows.filter((r) => results.get(r.id) && !results.get(r.id).ok);
+      const removable = failedRows.filter((r) => !isTransientFailure(results.get(r.id)));
+      const kept = failedRows.length - removable.length;
+      if (removable.length === 0) {
+        setTestAllNote(failedRows.length ? `${failedRows.length} gagal (timeout/transient), tidak ada yang dihapus.` : "Semua model OK.");
+      } else if (removable.length === rows.length) {
+        // Every model failing the same way points at the connection/key, not per-model access.
+        setTestAllNote("Semua model gagal — kemungkinan masalah koneksi/API key, tidak ada yang dihapus.");
+      } else {
+        const disableIds = [];
+        for (const r of removable) {
+          try {
+            if (r.source === "custom") {
+              const params = new URLSearchParams({ providerAlias: providerStorageAlias, id: r.id, type: "llm" });
+              await fetch(`/api/models/custom?${params}`, { method: "DELETE" });
+            } else if (r.source === "legacyAlias" && r.alias) {
+              await fetch(`/api/models/alias?alias=${encodeURIComponent(r.alias)}`, { method: "DELETE" });
+            } else {
+              disableIds.push(r.id);
+            }
+          } catch (error) {
+            console.log("Error removing model:", error);
+          }
+        }
+        if (disableIds.length) {
+          await fetch("/api/models/disabled", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ providerAlias: providerStorageAlias, ids: disableIds }),
+          });
+        }
+        await Promise.all([fetchCustomModels(), fetchAliases(), fetchDisabledModels()]);
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("customModelChanged"));
+        setTestAllNote(`${removable.length} model dihapus/di-disable karena tidak ada akses${kept ? `, ${kept} gagal timeout/transient dibiarkan` : ""}.`);
+      }
+    } finally {
+      setTestingAllModels(false);
     }
   };
 
@@ -1263,6 +1342,22 @@ export default function ProviderDetailPage() {
           Add Model
         </button>
 
+        {/* Copy every model id of this provider (one per line) — pastes straight into the combo's Bulk add by ID */}
+        {(customModelRows.length > 0 || displayModels.length > 0) && (
+          <button
+            onClick={() => copy(
+              [...customModelRows.map((m) => m.id), ...displayModels.map((m) => m.id)]
+                .map((id) => `${providerDisplayAlias}/${id}`)
+                .join("\n"),
+              "all-model-ids"
+            )}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-primary/50 hover:text-primary sm:w-auto"
+          >
+            <span className="material-symbols-outlined text-sm">{copied === "all-model-ids" ? "check" : "content_copy"}</span>
+            {copied === "all-model-ids" ? "Copied!" : `Copy all IDs (${customModelRows.length + displayModels.length})`}
+          </button>
+        )}
+
         {/* Import Qoder models button — only show for qoder/qoder-cn provider */}
         {(providerId === "qoder" || providerId === "qoder-cn") && connections.some((conn) => conn.isActive !== false) && (
           <button
@@ -1277,8 +1372,8 @@ export default function ProviderDetailPage() {
           </button>
         )}
 
-        {/* Import Cline /models catalog button — only show for cline and clinepass providers */}
-        {(providerId === "cline" || providerId === "clinepass") && connections.some((conn) => conn.isActive !== false) && (
+        {/* Import live /models catalog button — cline, clinepass and commandcode */}
+        {(providerId === "cline" || providerId === "clinepass" || providerId === "commandcode") && connections.some((conn) => conn.isActive !== false) && (
           <button
             onClick={handleImportClineModels}
             disabled={importingClineModels}
@@ -1290,6 +1385,49 @@ export default function ProviderDetailPage() {
             {importingClineModels ? translate("Fetching...") : translate("Import from /models")}
           </button>
         )}
+
+        {/* Test every model at once and list the ones that fail (e.g. no plan access) */}
+        {(providerId === "cline" || providerId === "clinepass" || providerId === "commandcode") && connections.some((conn) => conn.isActive !== false) && (
+          <button
+            onClick={() => handleTestAllModels([
+              ...customModelRows.map((m) => ({ id: m.id, source: m.source, alias: m.alias })),
+              ...displayModels.map((m) => ({ id: m.id, source: "builtin" })),
+            ])}
+            disabled={testingAllModels}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-amber-500/40 px-3 py-2 text-xs text-amber-600 dark:text-amber-400 transition-colors hover:border-amber-500 hover:bg-amber-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-sm" style={testingAllModels ? { animation: "spin 1s linear infinite" } : undefined}>
+              {testingAllModels ? "progress_activity" : "fact_check"}
+            </span>
+            {testingAllModels && testAllProgress ? `Testing ${testAllProgress.done}/${testAllProgress.total}...` : "Test All Models"}
+          </button>
+        )}
+
+        {(() => {
+          const failed = Object.entries(modelTestErrors).filter(([, v]) => v);
+          if (failed.length === 0) return testAllNote ? <p className="w-full text-xs text-text-muted">{testAllNote}</p> : null;
+          const noAccess = (v) => v.status === 401 || v.status === 403 || /HTTP (401|403)|plan|subscription|upgrade|not (have )?access|forbidden|not allowed|permission/i.test(v.error || "");
+          const denied = failed.filter(([, v]) => noAccess(v));
+          const other = failed.filter(([, v]) => !noAccess(v));
+          return (
+            <div className="w-full rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs">
+              <p className="mb-2 font-medium text-red-600 dark:text-red-400">
+                {failed.length} model gagal — {denied.length} no access, {other.length} error lain
+              </p>
+              {testAllNote && <p className="mb-2 text-text-main">{testAllNote}</p>}
+              {[["No access", denied], ["Other errors", other]].map(([label, rows]) => rows.length > 0 && (
+                <div key={label} className="mb-2">
+                  <p className="mb-1 text-text-muted">{label}</p>
+                  <ul className="space-y-0.5">
+                    {rows.map(([id, v]) => (
+                      <li key={id} className="break-words"><code>{id}</code> <span className="text-text-muted">— {String(v.error).slice(0, 160)}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Suggested models from provider API — show only models not yet added */}
         {suggestedModels.length > 0 && (() => {
