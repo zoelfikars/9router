@@ -276,8 +276,23 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   let lastStatus = null;
   let lastHeaders = null;
 
+  // Dashboard model test pins one connection via x-connection-id (see
+  // pingModelByKind). Without this, the test silently used whichever
+  // account the router picked first — not the connection being tested.
+  const preferredConnectionId =
+    request?.headers?.get?.("x-connection-id") ||
+    clientRawRequest?.headers?.["x-connection-id"] ||
+    clientRawRequest?.headers?.["X-Connection-Id"] ||
+    null;
+  const strictPin = Boolean(preferredConnectionId);
+
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { requestedModel: requestedModel || model });
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { requestedModel: requestedModel || model, preferredConnectionId, strictPreferredConnectionId: strictPin });
+
+    // Pinned connection is not usable — do NOT fall through to another account.
+    if (credentials?.preferredUnavailable) {
+      return errorResponse(HTTP_STATUS.SERVICE_UNAVAILABLE, `Pinned connection is not available for ${provider} (locked, excluded, or inactive)`);
+    }
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
@@ -375,6 +390,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     const shouldFallback = provider === "antigravity" && quotaResetMs
       ? true
       : (await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, resetsAtMs)).shouldFallback;
+
+    // Pinned test: a 403/5xx on the pinned account is the test result.
+    // Falling back to another account would report the wrong account's health.
+    if (shouldFallback && strictPin) {
+      return result.response;
+    }
 
     if (shouldFallback) {
       log.warn("FALLBACK", `⇄ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`);

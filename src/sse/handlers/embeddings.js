@@ -99,8 +99,17 @@ export async function handleEmbeddings(request) {
   let lastError = null;
   let lastStatus = null;
 
+  // Same x-connection-id pin as chat: dashboard model tests must test
+  // the selected connection, not whichever account the router picks.
+  const preferredConnectionId = request?.headers?.get?.("x-connection-id") || null;
+  const strictPin = Boolean(preferredConnectionId);
+
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { preferredConnectionId, strictPreferredConnectionId: strictPin });
+
+    if (credentials?.preferredUnavailable) {
+      return errorResponse(HTTP_STATUS.SERVICE_UNAVAILABLE, `Pinned connection is not available for ${provider} (locked, excluded, or inactive)`);
+    }
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
@@ -156,6 +165,12 @@ export async function handleEmbeddings(request) {
     }
 
     const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model);
+
+    // Pinned test: the pinned account's failure is the result, not a cue
+    // to silently try another account.
+    if (shouldFallback && strictPin) {
+      return result.response;
+    }
 
     if (shouldFallback) {
       log.warn("AUTH", `Account ${credentials.connectionName} unavailable (${result.status}), trying fallback`);
