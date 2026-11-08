@@ -23,6 +23,7 @@
 // The check runs before any credential lookup, so a denied request never
 // touches a provider account.
 import { getApiKeyByKey } from "@/lib/db/repos/apiKeysRepo.js";
+import { getConsistentMachineId } from "@/shared/utils/machineId";
 import { getCombos } from "@/lib/db/repos/combosRepo.js";
 import { getModelInfo, getComboModels } from "./model.js";
 import { resolveProviderId } from "@/shared/constants/providers.js";
@@ -67,7 +68,27 @@ export function extractClientApiKey(request) {
  * Keys are only authenticated elsewhere (middleware / requireApiKey); this only
  * decides what an identified key may call.
  */
+// Internal dashboard/CLI requests (e.g. pingModelByKind's model test) carry
+// the machine CLI token — the same token dashboardGuard trusts. They are
+// admin actions, not client calls through an endpoint key, so the key's
+// allow list must not gate them. Without this, a dashboard test of a model
+// that is not in the (restricted) Default Key's allow list fails with
+// "This API key is not allowed to use model ..." even though the provider
+// account itself can use it — while the same model works through an
+// allowed combo, because an allowed combo grants its members.
+const CLI_TOKEN_SALT = "9r-cli-auth";
+async function hasValidCliToken(request) {
+  const token = request?.headers?.get?.("x-9r-cli-token");
+  if (!token) return false;
+  try {
+    return token === await getConsistentMachineId(CLI_TOKEN_SALT);
+  } catch {
+    return false;
+  }
+}
+
 export async function getKeyAccessContext(request) {
+  if (await hasValidCliToken(request)) return null;
   const apiKey = extractClientApiKey(request);
   if (!apiKey) return null;
   const record = await getApiKeyByKey(apiKey);

@@ -1133,6 +1133,11 @@ export default function ProviderDetailPage() {
     </Modal>
   );
 
+  // Same single-connection pin as CompatibleModelsSection: unambiguous
+  // only when exactly one active connection exists for this provider.
+  const activeConnections = (connections || []).filter((c) => c.isActive !== false);
+  const pinnedConnectionId = activeConnections.length === 1 ? activeConnections[0].id : null;
+
   const handleTestModel = async (modelId, { quiet = false } = {}) => {
     // Re-entrancy guard: the model is already in flight (single-test racing a
     // test-all run), so report "unknown" — the caller filters these out instead
@@ -1144,7 +1149,7 @@ export default function ProviderDetailPage() {
       const res = await fetch("/api/models/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: `${providerStorageAlias}/${modelId}` }),
+        body: JSON.stringify({ model: `${providerStorageAlias}/${modelId}`, connectionId: pinnedConnectionId }),
       });
       const data = await res.json();
       result = { ok: !!data.ok, error: data.ok ? "" : (data.error || "Model not reachable"), status: data.status };

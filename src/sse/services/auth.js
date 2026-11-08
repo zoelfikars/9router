@@ -140,6 +140,16 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       return null;
     }
 
+    // Strict pin: a caller that pins a connection (dashboard model test)
+    // must never silently fall through to a different account — that was
+    // the test-models bug. Report it so the caller can surface it.
+    if (options?.strictPreferredConnectionId && preferredConnectionId) {
+      if (!availableConnections.some((c) => c.id === preferredConnectionId)) {
+        log.warn("AUTH", `${provider} | pinned connection ${preferredConnectionId.slice(0, 8)} not available (locked/excluded/inactive)`);
+        return { preferredUnavailable: true, connectionId: preferredConnectionId };
+      }
+    }
+
     const settings = await getSettings();
     // Per-provider strategy overrides global setting
     const providerOverride = (settings.providerStrategies || {})[providerId] || {};
