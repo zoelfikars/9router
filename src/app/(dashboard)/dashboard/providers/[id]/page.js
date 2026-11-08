@@ -95,8 +95,7 @@ export default function ProviderDetailPage() {
   const [oneByOneResults, setOneByOneResults] = useState({});
   const [oneByOneSummary, setOneByOneSummary] = useState(null);
   const stopOneByOneRef = useRef(false);
-  const [importingQoderModels, setImportingQoderModels] = useState(false);
-  const [importingClineModels, setImportingClineModels] = useState(false);
+  const [importingLiveModels, setImportingLiveModels] = useState(false);
   const { copied, copy } = useCopyToClipboard();
 
   const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
@@ -602,109 +601,96 @@ export default function ProviderDetailPage() {
     }
   };
 
-  // Fetch Qoder model list and automatically add to available models
-  const handleImportQoderModels = async () => {
-    if (importingQoderModels) return;
+  // Fetch the live /models catalog for ANY provider and add every model not
+  // yet present. The backend route already resolves per-provider catalogs
+  // (OpenAI-style /models, OAuth refresh flows, custom resolvers for
+  // cline/clinepass/commandcode/qoder/kimchi/kiro/cursor/zed/...), so the
+  // frontend no longer gates this behind a hardcoded provider list.
+  // No-auth providers (OpenCode Free, MiMo Free, ...) never create a connection,
+  // so there is no connection id to hit /api/providers/[id]/models with — they
+  // fall back to the provider's public catalog via `modelsFetcher` instead.
+  // Qoder ids may carry a "qoder/"/"qoder-cn/" prefix — strip it before storing.
+  const handleImportLiveModels = async () => {
+    if (importingLiveModels) return;
     const activeConnection = connections.find((conn) => conn.isActive !== false);
-    if (!activeConnection) {
-      alert(translate("Please add an active Qoder connection first"));
-      return;
-    }
-
-    setImportingQoderModels(true);
-    try {
-      const res = await fetch(`/api/providers/${activeConnection.id}/models`);
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || translate("Failed to fetch models"));
-        return;
-      }
-      const models = data.models || [];
-      if (models.length === 0) {
-        alert(translate("No models returned"));
-        return;
-      }
-
-      let importedCount = 0;
-      for (const model of models) {
-        const modelId = model.id || model.name;
-        if (!modelId) continue;
-        
-        // Qoder model ID format may be "qoder/auto", "qoder-cn/auto" or "auto",
-        // need to remove the provider prefix before storing.
-        const cleanModelId = modelId.replace(/^(qoder-cn|qoder)\//, "");
-        const alreadyExists = customModels.some(
-          (entry) => entry.providerAlias === providerStorageAlias && entry.id === cleanModelId && (entry.kind || entry.type || "llm") === "llm"
-        ) || Object.values(modelAliases).includes(`${providerStorageAlias}/${cleanModelId}`);
-        if (alreadyExists) {
-          continue;
-        }
-
-        await handleAddCustomModel(cleanModelId, "llm", providerStorageAlias);
-        importedCount += 1;
-      }
-      
-      if (importedCount === 0) {
-        alert(translate("All models already exist, no new models added"));
-      } else {
-        alert(translate("Successfully added") + ` ${importedCount} ` + translate("models"));
-      }
-    } catch (error) {
-      console.log("Error importing Qoder models:", error);
-      alert(translate("Error fetching models") + ": " + error.message);
-    } finally {
-      setImportingQoderModels(false);
-    }
-  };
-  // Fetch the live Cline /models catalog and add every model not yet present.
-  // Cline and ClinePass share the same catalog endpoint (api.cline.bot/api/v1/models).
-  // Command Code reuses this handler via its public /provider/v1/models catalog.
-  const handleImportClineModels = async () => {
-    if (importingClineModels) return;
-    const activeConnection = connections.find((conn) => conn.isActive !== false);
-    if (!activeConnection) {
+    const publicFetcher = providerInfo?.modelsFetcher;
+    if (!activeConnection && !(isFreeNoAuth && publicFetcher)) {
       alert(translate("Please add an active connection first"));
       return;
     }
-    setImportingClineModels(true);
+    setImportingLiveModels(true);
     try {
-      const res = await fetch(`/api/providers/${activeConnection.id}/models`);
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || translate("Failed to fetch models"));
-        return;
+      // `liveModels` (inner) must NOT shadow the component's `models` — that is
+      // the static built-in list used to skip ids the provider already ships.
+      let liveCatalog = [];
+      if (activeConnection) {
+        const res = await fetch(`/api/providers/${activeConnection.id}/models`);
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || translate("Failed to fetch models"));
+          return;
+        }
+        liveCatalog = data.models || [];
+      } else {
+        // Public catalog: keep every id (the "all-ids" filter), not just the
+        // curated free subset the suggested-models chips show.
+        liveCatalog = await fetchSuggestedModels({ ...publicFetcher, type: "all-ids" });
       }
-      const models = data.models || [];
-      if (models.length === 0) {
+      if (liveCatalog.length === 0) {
         alert(translate("No models returned"));
         return;
       }
-      let importedCount = 0;
-      for (const model of models) {
-        const modelId = model.id || model.name;
-        if (!modelId) continue;
-        const alreadyExists = customModels.some(
-          (entry) => entry.providerAlias === providerStorageAlias && entry.id === modelId && (entry.kind || entry.type || "llm") === "llm"
-        ) || Object.values(modelAliases).includes(`${providerStorageAlias}/${modelId}`);
-        if (alreadyExists) {
-          continue;
+      // Resolve the whole batch first, then POST each new model and refetch the
+      // custom list ONCE at the end — the previous per-model refetch (POST + GET
+      // per row) turned a 300-model catalog into 600 requests.
+      const existingCustom = new Set(
+        customModels
+          .filter((entry) => entry.providerAlias === providerStorageAlias && (entry.kind || entry.type || "llm") === "llm")
+          .map((entry) => entry.id)
+      );
+      const existingAliases = new Set(Object.values(modelAliases));
+      const builtinIds = new Set(models.map((m) => m.id));
+      const added = [];
+      const seen = new Set();
+      for (const model of liveCatalog) {
+        const rawId = model.id || model.name;
+        if (!rawId) continue;
+        // Qoder-style ids may carry a "qoder/"/"qoder-cn/" prefix — strip it
+        // before storing so the custom-model id stays canonical.
+        const modelId = String(rawId).replace(/^(qoder-cn|qoder)\//, "");
+        if (seen.has(modelId)) continue;
+        seen.add(modelId);
+        if (existingCustom.has(modelId) || builtinIds.has(modelId)) continue;
+        if (existingAliases.has(`${providerStorageAlias}/${modelId}`)) continue;
+
+        try {
+          const res = await fetch("/api/models/custom", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ providerAlias: providerStorageAlias, id: modelId, type: "llm" }),
+          });
+          if (res.ok) added.push(modelId);
+        } catch (error) {
+          console.log("Error adding custom model:", error);
         }
-        await handleAddCustomModel(modelId, "llm", providerStorageAlias);
-        importedCount += 1;
       }
-      if (importedCount === 0) {
+
+      if (added.length > 0) {
+        await fetchCustomModels();
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("customModelChanged"));
+      }
+      if (added.length === 0) {
         alert(translate("All models already exist, no new models added"));
       } else {
-        alert(translate("Successfully added") + ` ${importedCount} ` + translate("models"));
+        alert(translate("Successfully added") + ` ${added.length} ` + translate("models"));
       }
     } catch (error) {
-      console.log("Error importing Cline models:", error);
+      console.log(`Error importing ${providerId} models:`, error);
       alert(translate("Error fetching models") + ": " + error.message);
     } finally {
-      setImportingClineModels(false);
+      setImportingLiveModels(false);
     }
   };
-
   const handleRunOneByOneTest = async () => {
     if (oneByOneRunning || connections.length === 0) return;
 
@@ -1148,6 +1134,9 @@ export default function ProviderDetailPage() {
   );
 
   const handleTestModel = async (modelId, { quiet = false } = {}) => {
+    // Re-entrancy guard: the model is already in flight (single-test racing a
+    // test-all run), so report "unknown" — the caller filters these out instead
+    // of treating a missing result as a pass.
     if (testingModelIds.has(modelId)) return null;
     setTestingModelIds((prev) => new Set(prev).add(modelId));
     let result;
@@ -1194,14 +1183,23 @@ export default function ProviderDetailPage() {
     const worker = async () => {
       while (queue.length) {
         const row = queue.shift();
-        results.set(row.id, await handleTestModel(row.id, { quiet: true }));
+        // null = already in flight elsewhere (single-test racing this run) —
+        // skip it so it is neither counted as a pass nor pruned on no evidence.
+        const res = await handleTestModel(row.id, { quiet: true });
+        if (res) results.set(row.id, res);
         setTestAllProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
       }
     };
     try {
       await Promise.all(Array.from({ length: Math.min(4, rows.length) }, worker));
 
-      const failedRows = rows.filter((r) => results.get(r.id) && !results.get(r.id).ok);
+      // A null result means the model was already in flight elsewhere and was
+      // never actually tested this round — exclude it rather than counting it
+      // as passing (which would protect a dead model from pruning).
+      const failedRows = rows.filter((r) => {
+        const res = results.get(r.id);
+        return !!res && !res.ok;
+      });
       const removable = failedRows.filter((r) => !isTransientFailure(results.get(r.id)));
       const kept = failedRows.length - removable.length;
       if (removable.length === 0) {
@@ -1358,36 +1356,27 @@ export default function ProviderDetailPage() {
           </button>
         )}
 
-        {/* Import Qoder models button — only show for qoder/qoder-cn provider */}
-        {(providerId === "qoder" || providerId === "qoder-cn") && connections.some((conn) => conn.isActive !== false) && (
+        {/* Import live /models catalog — global: any provider with an active connection.
+            The backend already resolves per-provider catalogs (OpenAI-style /models,
+            OAuth refresh flows, custom resolvers for cline/clinepass/commandcode/
+            qoder/kimchi/kiro/cursor/zed/...), so no per-provider gating here.
+            No-auth providers (OpenCode Free, MiMo Free, ...) have no connection at
+            all, so they qualify on their public `modelsFetcher` catalog instead. */}
+        {(connections.some((conn) => conn.isActive !== false) || (isFreeNoAuth && !!providerInfo?.modelsFetcher)) && (
           <button
-            onClick={handleImportQoderModels}
-            disabled={importingQoderModels}
+            onClick={handleImportLiveModels}
+            disabled={importingLiveModels}
             className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-500/40 px-3 py-2 text-xs text-blue-600 dark:text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="material-symbols-outlined text-sm" style={importingQoderModels ? { animation: "spin 1s linear infinite" } : undefined}>
-              {importingQoderModels ? "progress_activity" : "download"}
+            <span className="material-symbols-outlined text-sm" style={importingLiveModels ? { animation: "spin 1s linear infinite" } : undefined}>
+              {importingLiveModels ? "progress_activity" : "download"}
             </span>
-            {importingQoderModels ? translate("Fetching...") : translate("Fetch Qoder Models")}
-          </button>
-        )}
-
-        {/* Import live /models catalog button — cline, clinepass and commandcode */}
-        {(providerId === "cline" || providerId === "clinepass" || providerId === "commandcode") && connections.some((conn) => conn.isActive !== false) && (
-          <button
-            onClick={handleImportClineModels}
-            disabled={importingClineModels}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-500/40 px-3 py-2 text-xs text-blue-600 dark:text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="material-symbols-outlined text-sm" style={importingClineModels ? { animation: "spin 1s linear infinite" } : undefined}>
-              {importingClineModels ? "progress_activity" : "download"}
-            </span>
-            {importingClineModels ? translate("Fetching...") : translate("Import from /models")}
+            {importingLiveModels ? translate("Fetching...") : translate("Import from /models")}
           </button>
         )}
 
         {/* Test every model at once and list the ones that fail (e.g. no plan access) */}
-        {(providerId === "cline" || providerId === "clinepass" || providerId === "commandcode") && connections.some((conn) => conn.isActive !== false) && (
+        {(connections.length > 0 || isFreeNoAuth) && (
           <button
             onClick={() => handleTestAllModels([
               ...customModelRows.map((m) => ({ id: m.id, source: m.source, alias: m.alias })),

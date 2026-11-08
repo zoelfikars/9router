@@ -30,6 +30,13 @@ export const FILTERS = {
       .filter((m) => typeof m?.id === "string")
       .map((m) => ({ id: m.id, name: m.id })),
 
+  // Whole /models catalog, every id kept — no-auth providers import all of it and
+  // "Test All Models" prunes the ids the account cannot reach.
+  "all-ids": (models) =>
+    (Array.isArray(models) ? models : [])
+      .filter((m) => typeof m?.id === "string")
+      .map((m) => ({ id: m.id, name: m.name || m.id })),
+
   // models.dev returns a large catalog; keep only mimo models
   "mimo-free": (models) =>
     (Array.isArray(models) ? models : [])

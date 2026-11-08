@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1.7
+# Dev image for hot reload: source is bind-mounted from the host (see
+# docker-compose.dev.yml), so code edits reload without rebuilding. Only
+# package.json changes need a rebuild.
+ARG NODE_IMAGE=node:22.23.4-alpine
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+
+FROM ${NODE_IMAGE}
+ARG NPM_REGISTRY
+WORKDIR /app
+
+RUN apk add --no-cache python3 make g++ linux-headers ffmpeg su-exec
+
+# Install deps in the image layer so they are not re-downloaded on every
+# container start. A new dependency means a rebuild of this image.
+COPY package.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm install \
+      --registry="${NPM_REGISTRY}" \
+      --fetch-retries=5 \
+      --fetch-retry-factor=2 \
+      --fetch-retry-mintimeout=10000 \
+      --fetch-retry-maxtimeout=120000 \
+      --fetch-timeout=300000
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATA_DIR=/app/data
+
+EXPOSE 20128
+
+# Webpack dev server: stable file watching through the bind mount.
+CMD ["npx", "next", "dev", "--webpack", "--hostname", "0.0.0.0", "--port", "20128"]

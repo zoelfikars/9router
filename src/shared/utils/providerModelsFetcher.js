@@ -2,7 +2,7 @@
 // Fetches via backend proxy to avoid CORS issues
 
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const cache = new Map(); // key: fetcher.url → { data, expiresAt }
+const cache = new Map(); // key: fetcher.type + url → { data, expiresAt }
 
 /**
  * Fetch suggested models for a provider using its modelsFetcher config.
@@ -13,7 +13,10 @@ const cache = new Map(); // key: fetcher.url → { data, expiresAt }
 export async function fetchSuggestedModels(fetcher) {
   if (!fetcher?.url || !fetcher?.type) return [];
 
-  const cached = cache.get(fetcher.url);
+  // Same URL can be read through different filters (opencode-free vs all-ids),
+  // so the cache key carries the filter type too.
+  const cacheKey = `${fetcher.type}:${fetcher.url}`;
+  const cached = cache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) return cached.data;
 
   try {
@@ -22,7 +25,7 @@ export async function fetchSuggestedModels(fetcher) {
     if (!res.ok) return [];
     const json = await res.json();
     const data = json.data ?? [];
-    cache.set(fetcher.url, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+    cache.set(cacheKey, { data, expiresAt: Date.now() + CACHE_TTL_MS });
     return data;
   } catch {
     return [];

@@ -77,4 +77,12 @@ describe("ModelSelectModal LIVE_CATALOG_PROVIDERS includes zed (#4244)", () => {
     expect(src).toContain("zedModels");
     expect(src).toContain("zedConnectionIds");
   });
+
+  it("includes commandcode in LIVE_CATALOG_PROVIDERS (live catalog import is provider-global)", () => {
+    const match = src.match(/const LIVE_CATALOG_PROVIDERS\s*=\s*\[([^\]]+)\]/);
+    expect(match).toBeTruthy();
+    expect(match[1]).toContain('"commandcode"');
+    expect(src).toContain("commandcodeModels");
+    expect(src).toContain("commandcodeConnectionIds");
+  });
 });
