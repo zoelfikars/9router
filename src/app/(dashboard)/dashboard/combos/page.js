@@ -1079,7 +1079,7 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
   );
 }
 
-function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown, onRemove }) {
+function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown, onRemove, onCopy, copied }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -1165,6 +1165,15 @@ function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMove
         </button>
       </div>
 
+      {/* Copy model id */}
+      <button
+        onClick={onCopy}
+        className={`p-0.5 rounded transition-all ${copied ? "text-green-500" : "text-text-muted hover:text-primary hover:bg-black/5 dark:hover:bg-white/5"}`}
+        title={copied ? "Copied!" : "Copy model id"}
+      >
+        <span className="material-symbols-outlined text-[12px]">{copied ? "check" : "content_copy"}</span>
+      </button>
+
       {/* Remove */}
       <button
         onClick={onRemove}
@@ -1185,6 +1194,7 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState("");
   const [modelAliases, setModelAliases] = useState({});
+  const { copied: copiedModel, copy: copyModel } = useCopyToClipboard();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -1323,15 +1333,26 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
             <div className="mb-1.5 flex items-center justify-between">
               <label className="text-sm font-medium">Models{models.length > 0 ? ` (${models.length})` : ""}</label>
               {models.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setModels([])}
-                  className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 transition-colors"
-                  title="Remove all models from this combo"
-                >
-                  <span className="material-symbols-outlined text-[14px]">delete_sweep</span>
-                  Remove all
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => copyModel(models.join("\n"), "all")}
+                    className={`flex items-center gap-1 text-xs transition-colors ${copiedModel === "all" ? "text-green-500" : "text-text-muted hover:text-primary"}`}
+                    title="Copy all model ids (one per line)"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">{copiedModel === "all" ? "check" : "content_copy"}</span>
+                    {copiedModel === "all" ? "Copied!" : "Copy all"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModels([])}
+                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 transition-colors"
+                    title="Remove all models from this combo"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">delete_sweep</span>
+                    Remove all
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1360,6 +1381,8 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
                       onMoveUp={() => handleMoveUp(index)}
                       onMoveDown={() => handleMoveDown(index)}
                       onRemove={() => handleRemoveModel(index)}
+                      onCopy={() => copyModel(model, `model-${index}`)}
+                      copied={copiedModel === `model-${index}`}
                     />
                   ))}
                 </div>
