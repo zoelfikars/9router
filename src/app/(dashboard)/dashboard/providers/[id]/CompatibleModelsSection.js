@@ -91,6 +91,12 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
   const [testAllProgress, setTestAllProgress] = useState(null);
   const [testAllNote, setTestAllNote] = useState("");
 
+  // Pin the test to the one active connection when unambiguous. With
+  // several connections there is no single "the" account to test, so leave
+  // it provider-level (router picks) — use the per-connection test for that.
+  const activeConnections = (connections || []).filter((c) => c.isActive !== false);
+  const pinnedConnectionId = activeConnections.length === 1 ? activeConnections[0].id : null;
+
   const handleTestModel = async (modelId) => {
     // A Set (not a single id) so the 4-way test-all pool can run different
     // models concurrently without clobbering each other's in-flight marker.
@@ -101,7 +107,7 @@ export default function CompatibleModelsSection({ providerStorageAlias, provider
       const res = await fetch("/api/models/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: `${providerStorageAlias}/${modelId}` }),
+        body: JSON.stringify({ model: `${providerStorageAlias}/${modelId}`, connectionId: pinnedConnectionId }),
       });
       const data = await res.json();
       result = { ok: !!data.ok, error: data.ok ? "" : (data.error || "Model not reachable"), status: data.status };
