@@ -22,9 +22,13 @@ const PROVIDER_ORDER = [
   ...Object.keys(APIKEY_PROVIDERS),
 ];
 
-// Providers with per-account live catalogs live in selectableModels so the Combo
-// picker, the CLI-tool cards and /api/providers/[id]/models cannot drift apart
-// (commandcode models were unreachable from the cards for exactly that reason).
+// Providers with per-account live catalogs via /api/providers/[id]/models.
+// Static registry stays as fallback when live fetch fails or is empty.
+// zed added in #4244: its backend customResolver already returns live models
+// but the frontend omitted it, hiding Zed entirely from the Combo picker.
+// commandcode added alongside its provider-page import/test/copy tooling: its
+// public catalog changes often, so the static registry goes stale fast.
+const LIVE_CATALOG_PROVIDERS = ["cursor", "cline", "clinepass", "zed", "commandcode"];
 
 // Fetch a provider's account-scoped catalog for every active connection and merge
 // the results. Entries collapse by model id on purpose: two connections of the
@@ -152,8 +156,8 @@ export default function ModelSelectModal({
   const clineConnectionIds = liveConnectionIdsByProvider.cline;
   const clinepassConnectionIds = liveConnectionIdsByProvider.clinepass;
   const zedConnectionIds = liveConnectionIdsByProvider.zed;
-  const claudeConnectionIds = liveConnectionIdsByProvider.claude;
   const commandcodeConnectionIds = liveConnectionIdsByProvider.commandcode;
+  const claudeConnectionIds = liveConnectionIdsByProvider.claude;
 
   const cursorModels = useLiveProviderModels(isOpen, cursorConnectionIds, "Cursor");
   const clineModels = useLiveProviderModels(isOpen, clineConnectionIds, "Cline");
@@ -422,7 +426,7 @@ export default function ModelSelectModal({
           hasModels: mergedModels.length > 0,
         };
       } else {
-        const liveModels = liveModelsByProvider[providerId] || [];
+        const liveModels = providerId === "cursor" ? cursorModels : providerId === "cline" ? clineModels : providerId === "clinepass" ? clinepassModels : providerId === "zed" ? zedModels : providerId === "commandcode" ? commandcodeModels : [];
         const hardcodedModels = liveModels.length > 0
           ? liveModels
           : getModelsByProviderId(providerId);

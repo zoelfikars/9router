@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="id">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Model Tiers</title>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --card: #fff;
+      --ink: #1c1917;
+      --mut: #78716c;
+      --line: #e7e5e4;
+      --bar: #d6d3d1;
+      --opus: #7c3aed;
+      --sonnet: #2563eb;
+      --haiku: #059669;
+      --est: #b45309;
+      --estbg: #fef3c7
+    }
+
+    @media (prefers-color-scheme:dark) {
+      :root:not([data-theme=light]) {
+        --bg: #0c0a09;
+        --card: #1c1917;
+        --ink: #f5f5f4;
+        --mut: #a8a29e;
+        --line: #292524;
+        --bar: #44403c;
+        --opus: #a78bfa;
+        --sonnet: #60a5fa;
+        --haiku: #34d399;
+        --est: #fbbf24;
+        --estbg: #422006
+      }
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 16px 48px
+    }
+
+    h1 {
+      font-size: 22px;
+      margin: 0 0 4px
+    }
+
+    .sub {
+      color: var(--mut);
+      margin: 0 0 18px
+    }
+
+    .sum {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 22px
+    }
+
+    @media(max-width:640px) {
+      .sum {
+        grid-template-columns: 1fr
+      }
+    }
+
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px 14px;
+      border-top: 3px solid var(--c)
+    }
+
+    .stat b {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--c)
+    }
+
+    .stat div {
+      color: var(--mut);
+      font-size: 12px;
+      margin-top: 4px
+    }
+
+    .stat strong {
+      color: var(--ink);
+      font-size: 18px;
+      display: block;
+      margin-top: 2px
+    }
+
+    section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 20px;
+      overflow: hidden;
+      border-top: 3px solid var(--c)
+    }
+
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      flex-wrap: wrap
+    }
+
+    .head h2 {
+      margin: 0;
+      font-size: 16px;
+      color: var(--c)
+    }
+
+    .head span {
+      color: var(--mut);
+      font-size: 12px;
+      margin-left: 8px;
+      font-weight: 400
+    }
+
+    button {
+      font: inherit;
+      font-size: 12px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 6px;
+      cursor: pointer
+    }
+
+    button:hover {
+      border-color: var(--c);
+      color: var(--c)
+    }
+
+    .scroll {
+      overflow-x: auto
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px
+    }
+
+    th,
+    td {
+      padding: 7px 14px;
+      text-align: right;
+      border-top: 1px solid var(--line);
+      white-space: nowrap
+    }
+
+    th {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--mut);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      border-top: 0
+    }
+
+    th:nth-child(-n+3),
+    td:nth-child(-n+3) {
+      text-align: left
+    }
+
+    td.n {
+      font-weight: 600
+    }
+
+    td.id {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      color: var(--mut)
+    }
+
+    .sc {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 170px
+    }
+
+    .track {
+      flex: 1;
+      height: 8px;
+      background: var(--bar);
+      border-radius: 4px;
+      overflow: hidden
+    }
+
+    .fill {
+      height: 100%;
+      background: var(--c);
+      border-radius: 4px
+    }
+
+    .sc b {
+      width: 38px;
+      text-align: right;
+      font-variant-numeric: tabular-nums
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--estbg);
+      color: var(--est);
+      margin-left: 6px;
+      vertical-align: 1px;
+      cursor: help
+    }
+
+    td.q {
+      font-variant-numeric: tabular-nums
+    }
+
+    td.na {
+      color: var(--mut)
+    }
+
+    .sc {
+      min-width: 130px
+    }
+
+    @media(max-width:900px) {
+
+      th:nth-child(3),
+      td:nth-child(3) {
+        display: none
+      }
+
+      table {
+        min-width: 0
+      }
+
+      th,
+      td {
+        padding: 7px 8px
+      }
+
+      th:nth-child(-n+2),
+      td:nth-child(-n+2) {
+        text-align: left
+      }
+
+      #allTable th:nth-child(3),
+      #allTable td:nth-child(3) {
+        display: table-cell
+      }
+
+      #allTable th:nth-child(4),
+      #allTable td:nth-child(4) {
+        display: none
+      }
+    }
+
+    .note {
+      color: var(--mut);
+      font-size: 12px;
+      margin-top: 6px
+    }
+
+    /* ==== tabel gabungan ==== */
+    #allTable {
+      min-width: 880px
+    }
+
+    #allTable th:nth-child(-n+4),
+    #allTable td:nth-child(-n+4) {
+      text-align: left
+    }
+
+    #allTable th[data-sort] {
+      cursor: pointer;
+      user-select: none;
+      position: relative
+    }
+
+    #allTable th[data-sort]:hover {
+      color: var(--ink)
+    }
+
+    #allTable th .sec {
+      opacity: .5;
+      font-size: 10px;
+      margin-left: 2px
+    }
+
+    #allTable th .pri {
+      font-size: 11px;
+      margin-left: 2px
+    }
+
+    .tier {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: .04em
+    }
+
+    .tier.opus {
+      background: rgba(124, 58, 237, .14);
+      color: var(--opus)
+    }
+
+    .tier.sonnet {
+      background: rgba(37, 99, 235, .14);
+      color: var(--sonnet)
+    }
+
+    .tier.haiku {
+      background: rgba(5, 150, 105, .14);
+      color: var(--haiku)
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <h1>Model tiers: Opus / Sonnet / Haiku</h1>
+    <p class="sub">78 model Command Code, dibagi 26-26-26 berdasarkan Intelligence Index. Kuota = estimasi request <b>5h
+        / 7d / Monthly</b>. Tabel gabungan: klik header untuk sort primer; <b>Intellect otomatis jadi tiebreaker</b> (▼)
+      saat sort-nya kuota.</p>
+    <div class="sum" id="sum"></div>
+    <div id="combined"></div>
+    <div id="tiers"></div>
+    <p class="note"><span class="tag">est</span> = skor tidak ada di data sumber, diestimasi dari model sekeluarga
+      (arahkan kursor untuk alasannya). Bukan angka resmi.</p>
+  </div>
+  <script>
+    const D = { "opus": [{ "id": "cmc/claude-sonnet-5-5", "name": "Claude Sonnet 5.5", "score": 56.0, "est": false, "why": "", "q": [476, 1190, 2380] }, { "id": "cmc/google/gemini-4-argon", "name": "Gemini 4 Argon", "score": 52.6, "est": false, "why": "", "q": [465, 1160, 2330] }, { "id": "cmc/meta/muse-spark-1.3", "name": "Muse Spark 1.3", "score": 48.1, "est": false, "why": "", "q": [642, 1600, 3210] }, { "id": "cmc/meta/muse-spark-1.3-contributor", "name": "Muse Spark 1.3 Contributor", "score": 48.1, "est": true, "why": "= muse-spark-1.3", "q": [27300, 68200, 136000] }, { "id": "cmc/gpt-6-sol", "name": "GPT-6 Sol", "score": 47.6, "est": false, "why": "", "q": [303, 758, 1520] }, { "id": "cmc/gpt-5.6-sol", "name": "GPT-5.6 Sol", "score": 47.0, "est": false, "why": "", "q": [178, 444, 888] }, { "id": "cmc/xai/grok-4.7", "name": "Grok 4.7", "score": 46.4, "est": false, "why": "", "q": [216, 540, 1080] }, { "id": "cmc/xiaomi/mimo-v2.6-pro", "name": "MiMo V2.6 Pro", "score": 46.3, "est": false, "why": "", "q": [8550, 21400, 42700] }, { "id": "cmc/xiaomi/mimo-v2.6-pro-ultraspeed", "name": "MiMo V2.6 Pro UltraSpeed", "score": 46.3, "est": true, "why": "= mimo-v2.6-pro", "q": [570, 1420, 2850] }, { "id": "cmc/gpt-6.1-terra", "name": "GPT-6.1 Terra", "score": 46.0, "est": true, "why": "terra > 5.6-terra 42.1", "q": [976, 2440, 4880] }, { "id": "cmc/moonshotai/Kimi-K3.1-Pro", "name": "Kimi K3.1 Pro", "score": 46.0, "est": true, "why": "> Kimi-K3 43.6", "q": [441, 1100, 2210] }, { "id": "cmc/Qwen/Qwen3.8-Max-0902", "name": "Qwen 3.8 Max 0902", "score": 45.4, "est": false, "why": "", "q": [392, 980, 1960] }, { "id": "cmc/zai-org/GLM-5.3", "name": "GLM-5.3", "score": 44.8, "est": false, "why": "", "q": [406, 1010, 2030] }, { "id": "cmc/xai/grok-4.6", "name": "Grok 4.6", "score": 44.3, "est": false, "why": "", "q": [216, 540, 1080] }, { "id": "cmc/stepfun/Step-5-Preview", "name": "Step 5 Preview", "score": 43.7, "est": false, "why": "", "q": [1560, 3910, 7810] }, { "id": "cmc/moonshotai/Kimi-K3", "name": "Kimi K3", "score": 43.6, "est": false, "why": "", "q": [294, 735, 1470] }, { "id": "cmc/claude-haiku-5-5", "name": "Claude Haiku 5.5", "score": 43.4, "est": false, "why": "", "q": [8960, 22400, 44800] }, { "id": "cmc/minimax/minimax-m3.1-flash", "name": "MiniMax M3.1 Flash", "score": 42.7, "est": false, "why": "", "q": [6350, 15900, 31700] }, { "id": "cmc/gpt-5.6-terra", "name": "GPT-5.6 Terra", "score": 42.1, "est": false, "why": "", "q": [296, 740, 1480] }, { "id": "cmc/z-ai/glm-5.3-flash", "name": "GLM-5.3 Flash", "score": 41.8, "est": false, "why": "", "q": [13000, 32400, 64900] }, { "id": "cmc/z-ai/glm-5.3-flashx", "name": "GLM-5.3 FlashX", "score": 41.8, "est": true, "why": "= glm-5.3-flash", "q": [1420, 3540, 7090] }, { "id": "cmc/inclusionai/ling-3.1-flash", "name": "Ling 3.1 Flash", "score": 41.1, "est": false, "why": "", "q": [6430, 16100, 32200] }, { "id": "cmc/inclusionai/ling-3.1-flash-1019", "name": "Ling 3.1 Flash 1019", "score": 41.1, "est": true, "why": "= ling-3.1-flash", "q": [6430, 16100, 32200] }, { "id": "cmc/google/gemini-3.8-flash", "name": "Gemini 3.8 Flash", "score": 40.9, "est": false, "why": "", "q": [980, 2450, 4900] }, { "id": "cmc/Qwen/Qwen3.8-Max", "name": "Qwen 3.8 Max", "score": 40.2, "est": false, "why": "", "q": [392, 980, 1960] }, { "id": "cmc/tencent/hy4-preview", "name": "Tencent Hy4 Preview", "score": 40.0, "est": true, "why": "klaim vendor ~GLM-5.3/K3; Hy3=25.3", "q": [1840, 4590, 9180] }], "sonnet": [{ "id": "cmc/meta/muse-spark-1.2", "name": "Muse Spark 1.2", "score": 39.6, "est": false, "why": "", "q": [642, 1600, 3210] }, { "id": "cmc/meta/muse-spark-1.2-contributor", "name": "Muse Spark 1.2 Contributor", "score": 39.6, "est": true, "why": "= muse-spark-1.2", "q": [27300, 68200, 136000] }, { "id": "cmc/deepseek/deepseek-v4.1-flash", "name": "DeepSeek V4.1 Flash (latest)", "score": 39.5, "est": false, "why": "", "q": [56400, 141000, 282000] }, { "id": "cmc/google/gemini-3.7-flash", "name": "Gemini 3.7 Flash", "score": 39.1, "est": false, "why": "", "q": [980, 2450, 4900] }, { "id": "cmc/gpt-5.4", "name": "GPT-5.4", "score": 39.0, "est": false, "why": "", "q": [237, 592, 1180] }, { "id": "cmc/meta/muse-spark-open", "name": "Muse Spark Open", "score": 38.9, "est": false, "why": "", "q": [642, 1600, 3210] }, { "id": "cmc/xai/grok-4.5", "name": "Grok 4.5", "score": 38.8, "est": false, "why": "", "q": [216, 540, 1080] }, { "id": "cmc/gpt-5.5", "name": "GPT-5.5", "score": 38.4, "est": false, "why": "", "q": [118, 296, 592] }, { "id": "cmc/mistral/mistral-large-4", "name": "Mistral Large 4", "score": 38.4, "est": false, "why": "", "q": [672, 1680, 3360] }, { "id": "cmc/claude-sonnet-5", "name": "Claude Sonnet 5", "score": 38.2, "est": false, "why": "", "q": [299, 746, 1490] }, { "id": "cmc/gpt-6-luna", "name": "GPT-6 Luna", "score": 38.1, "est": false, "why": "", "q": [9090, 22700, 45500] }, { "id": "cmc/deepseek/deepseek-v4.1-flash-fast", "name": "DeepSeek V4.1 Flash Fast (latest)", "score": 38.0, "est": true, "why": "varian fast v4.1-flash 39.5", "q": [13400, 33500, 67000] }, { "id": "cmc/xiaomi/mimo-v2.6-flash", "name": "MiMo V2.6 Flash", "score": 37.9, "est": false, "why": "", "q": [19500, 48700, 97400] }, { "id": "cmc/gpt-5.6-luna", "name": "GPT-5.6 Luna", "score": 37.3, "est": false, "why": "", "q": [4440, 11100, 22200] }, { "id": "cmc/deepseek/deepseek-v4-pro", "name": "DeepSeek V4 Pro (latest)", "score": 36.0, "est": false, "why": "", "q": [2960, 7410, 14800] }, { "id": "cmc/deepseek/deepseek-v4-flash-vision-exp", "name": "DeepSeek V4 Flash Vision (exp)", "score": 34.8, "est": false, "why": "", "q": [15400, 38500, 76900] }, { "id": "cmc/google/gemini-3.6-flash", "name": "Gemini 3.6 Flash", "score": 34.0, "est": false, "why": "", "q": [392, 980, 1960] }, { "id": "cmc/deepseek/deepseek-v4-flash", "name": "DeepSeek V4 Flash (latest)", "score": 34.0, "est": false, "why": "", "q": [35900, 89700, 179000] }, { "id": "cmc/Qwen/Qwen3.8-27B", "name": "Qwen 3.8 27B", "score": 33.7, "est": false, "why": "", "q": [5480, 13700, 27400] }, { "id": "cmc/meta/muse-spark-1.1", "name": "Muse Spark 1.1", "score": 33.7, "est": false, "why": "", "q": [428, 1070, 2140] }, { "id": "cmc/zai-org/GLM-5.2", "name": "GLM-5.2", "score": 33.7, "est": false, "why": "", "q": [1080, 2710, 5410] }, { "id": "cmc/ornith/ornith-1.5-122b", "name": "Ornith 1.5 122B", "score": 33.0, "est": true, "why": "tanpa data independen", "q": [4780, 11900, 23900] }, { "id": "cmc/zai-org/GLM-5.2-Fast", "name": "GLM-5.2 Fast", "score": 33.0, "est": true, "why": "~ GLM-5.2 33.7", "q": [207, 518, 1040] }, { "id": "cmc/google/gemini-3.5-flash", "name": "Gemini 3.5 Flash", "score": 32.6, "est": false, "why": "", "q": [381, 952, 1900] }, { "id": "cmc/gpt-5.3-codex", "name": "GPT-5.3 Codex", "score": 32.5, "est": false, "why": "", "q": [143, 359, 717] }, { "id": "cmc/deepseek/deepseek-v4-flash-fast", "name": "DeepSeek V4 Flash Fast", "score": 32.0, "est": true, "why": "varian fast v4-flash 34.0", "q": [1560, 3910, 7820] }], "haiku": [{ "id": "cmc/Qwen/Qwen3.8-Flash", "name": "Qwen 3.8 Flash", "score": 32.0, "est": true, "why": "flash < 27B 33.7", "q": [5870, 14700, 29400] }, { "id": "cmc/claude-sonnet-4-6", "name": "Claude Sonnet 4.6", "score": 30.1, "est": false, "why": "", "q": [199, 498, 995] }, { "id": "cmc/Qwen/Qwen3.8-Omni-Flash", "name": "Qwen 3.8 Omni Flash", "score": 30.0, "est": true, "why": "flash < 27B 33.7", "q": [5920, 14800, 29600] }, { "id": "cmc/reflection/beam:free", "name": "beam:free", "score": 30.0, "est": true, "why": "AA resmi: 30", "q": null }, { "id": "cmc/Qwen/Qwen3.7-Max", "name": "Qwen 3.7 Max", "score": 29.5, "est": false, "why": "", "q": [302, 754, 1510] }, { "id": "cmc/MiniMaxAI/MiniMax-M3", "name": "MiniMax M3", "score": 29.2, "est": false, "why": "", "q": [3360, 8410, 16800] }, { "id": "cmc/Qwen/Qwen3.6-Plus", "name": "Qwen 3.6 Plus", "score": 27.0, "est": false, "why": "", "q": [1430, 3580, 7170] }, { "id": "cmc/nvidia/nemotron-3.5-super-vl", "name": "Nemotron 3.5 Super VL", "score": 26.5, "est": false, "why": "", "q": [2650, 6640, 13300] }, { "id": "cmc/moonshotai/Kimi-K2.7-Code", "name": "Kimi K2.7 Code", "score": 25.8, "est": false, "why": "", "q": [1270, 3160, 6330] }, { "id": "cmc/moonshotai/Kimi-K2.7-Code-Highspeed", "name": "Kimi K2.7 Code HighSpeed", "score": 25.8, "est": true, "why": "= Kimi-K2.7-Code", "q": [271, 678, 1360] }, { "id": "cmc/tencent/hy3-paid", "name": "Tencent Hy3", "score": 25.3, "est": false, "why": "", "q": [8090, 20200, 40400] }, { "id": "cmc/Qwen/Qwen3.7-Plus", "name": "Qwen 3.7 Plus", "score": 25.2, "est": false, "why": "", "q": [1850, 4630, 9270] }, { "id": "cmc/stealth/glyph-cluster:free", "name": "glyph-cluster:free", "score": 25.0, "est": true, "why": "TIDAK ADA data; default Haiku", "q": null }, { "id": "cmc/moonshotai/Kimi-K2.6", "name": "Kimi-K2.6", "score": 25.0, "est": true, "why": "lebih lama dari K2.7", "q": null }, { "id": "cmc/gpt-5.4-mini", "name": "GPT-5.4 Mini", "score": 24.1, "est": false, "why": "", "q": [789, 1970, 3940] }, { "id": "cmc/nvidia/nemotron-3-ultra-550b-a55b", "name": "Nemotron 3 Ultra", "score": 22.9, "est": false, "why": "", "q": [862, 2160, 4310] }, { "id": "cmc/google/gemini-3.5-flash-lite", "name": "Gemini 3.5 Flash Lite", "score": 22.2, "est": false, "why": "", "q": [1790, 4460, 8930] }, { "id": "cmc/Qwen/Qwen3.7-Flash", "name": "Qwen3.7-Flash", "score": 22.0, "est": true, "why": "< Qwen3.7-Plus 25.2", "q": null }, { "id": "cmc/MiniMaxAI/MiniMax-M2.5", "name": "MiniMax-M2.5", "score": 22.0, "est": true, "why": "lebih lama dari M3 29.2", "q": null }, { "id": "cmc/zai-org/GLM-5", "name": "GLM-5", "score": 21.0, "est": true, "why": "lebih lama dari GLM-5.2", "q": null }, { "id": "cmc/moonshotai/Kimi-K2.5", "name": "Kimi-K2.5", "score": 20.0, "est": true, "why": "lebih lama dari K2.6", "q": null }, { "id": "cmc/stepfun/Step-3.7-Flash", "name": "Step 3.7 Flash", "score": 19.5, "est": false, "why": "", "q": [2510, 6280, 12600] }, { "id": "cmc/meituan/LongCat-2.0", "name": "LongCat 2.0", "score": 19.1, "est": false, "why": "", "q": [15400, 38500, 76900] }, { "id": "cmc/stepfun/Step-3.5-Flash", "name": "Step 3.5 Flash", "score": 17.0, "est": false, "why": "", "q": [5300, 13300, 26500] }, { "id": "cmc/google/gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite", "score": 15.6, "est": false, "why": "", "q": [2000, 5000, 10000] }, { "id": "cmc/claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5", "score": 15.4, "est": false, "why": "", "q": [597, 1490, 2990] }] };
+    const C = { opus: "--opus", sonnet: "--sonnet", haiku: "--haiku" };
+    const fmt = n => n == null ? "—" : n.toLocaleString("en-US");
+    const med = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 };
+    const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    let sum = "", body = "";
+    for (const k of ["opus", "sonnet", "haiku"]) {
+      const v = D[k], sc = v.map(x => x.score), lo = Math.min(...sc), hi = Math.max(...sc), est = v.filter(x => x.est).length;
+      const sty = `style="--c:var(${C[k]})"`;
+      sum += `<div class="stat" ${sty}><b>${k}</b><strong>${lo.toFixed(1)} – ${hi.toFixed(1)}</strong><div>${v.length} model · median ${med(sc).toFixed(1)} · ${est} estimasi</div></div>`;
+      body += `<section ${sty}><div class="head"><h2>${k[0].toUpperCase() + k.slice(1)}<span>${v.length} model</span></h2><button data-copy="${k}">Copy IDs</button></div><div class="scroll"><table><thead><tr><th>#</th><th>Model</th><th>ID</th><th>Intellect</th><th>5h</th><th>7d</th><th>Monthly</th></tr></thead><tbody>` +
+        v.map((x, i) => `<tr><td>${i + 1}</td><td class="n">${esc(x.name)}${x.est ? `<span class="tag" title="${esc(x.why)}">est</span>` : ""}</td><td class="id">${esc(x.id)}</td><td><div class="sc"><div class="track"><div class="fill" style="width:${x.score / 60 * 100}%"></div></div><b>${x.score.toFixed(1)}</b></div></td>` +
+          (x.q ? x.q.map(n => `<td class="q">${fmt(n)}</td>`).join("") : `<td class="q na" colspan="3" title="tidak ada di tabel kuota">—</td>`) + `</tr>`).join("") + `</tbody></table></div></section>`;
+    }
+    document.getElementById("sum").innerHTML = sum; document.getElementById("tiers").innerHTML = body;
+
+    /* ====== Tabel gabungan (semua tier) dengan MULTI-SORT ====== */
+    const ALL = [];
+    for (const k of ["opus", "sonnet", "haiku"]) for (const x of D[k]) ALL.push({ ...x, tier: k });
+    const TIERLBL = { opus: "Opus", sonnet: "Sonnet", haiku: "Haiku" };
+
+    // sortKey bisa: "score" (Intellect) | "0" (5h) | "1" (7d) | "2" (Monthly)
+    let sortKey = "score", sortDir = -1;
+
+    const getVal = (x, k) => k === "score" ? x.score : (x.q ? x.q[+k] : null);
+
+    function renderCombined() {
+      const rows = ALL.slice().sort((a, b) => {
+        const ap = getVal(a, sortKey), bp = getVal(b, sortKey);
+        // null selalu di bawah, apapun arah sort-nya
+        if (ap == null && bp != null) return 1;
+        if (ap != null && bp == null) return -1;
+        if (ap != null && bp != null && ap !== bp) return (ap - bp) * sortDir;
+        // tiebreaker: Intellect descending (hanya jika sort primer bukan Intellect)
+        if (sortKey !== "score") return b.score - a.score;
+        return 0;
+      });
+
+      const html = `<section style="--c:var(--ink)"><div class="head"><h2>Semua Tier<span>${ALL.length} model · klik header untuk sort primer; Intellect = tiebreaker ▼</span></h2></div><div class="scroll"><table id="allTable"><thead><tr><th>#</th><th>Tier</th><th>Model</th><th>ID</th><th data-sort="score">Intellect</th><th data-sort="0">5h</th><th data-sort="1">7d</th><th data-sort="2">Monthly</th></tr></thead><tbody>` +
+        rows.map((x, i) => `<tr><td>${i + 1}</td><td><span class="tier ${x.tier}">${TIERLBL[x.tier]}</span></td><td class="n">${esc(x.name)}${x.est ? `<span class="tag" title="${esc(x.why)}">est</span>` : ""}</td><td class="id">${esc(x.id)}</td><td><div class="sc"><div class="track"><div class="fill" style="width:${x.score / 60 * 100}%"></div></div><b>${x.score.toFixed(1)}</b></div></td>` +
+          (x.q ? x.q.map(n => `<td class="q">${fmt(n)}</td>`).join("") : `<td class="q na" colspan="3" title="tidak ada di tabel kuota">—</td>`) + `</tr>`).join("") +
+        `</tbody></table></div></section>`;
+      document.getElementById("combined").innerHTML = html;
+
+      // pasang indikator + handler
+      document.querySelectorAll("#allTable th[data-sort]").forEach(th => {
+        const k = th.dataset.sort;
+        if (!th.dataset.base) th.dataset.base = th.textContent;
+        let ind = "";
+        if (k === sortKey) {
+          ind = `<span class="pri">${sortDir > 0 ? "▲" : "▼"}</span>`;
+        } else if (k === "score" && sortKey !== "score") {
+          ind = `<span class="sec" title="tiebreaker (descending)">▼</span>`;
+        }
+        th.innerHTML = th.dataset.base + ind;
+        th.onclick = () => {
+          if (sortKey === k) sortDir *= -1;
+          else { sortKey = k; sortDir = -1; }
+          renderCombined();
+        };
+      });
+    }
+    renderCombined();
+
+    document.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => {
+      const t = D[b.dataset.copy].map(x => x.id).join("\n");
+      try { await navigator.clipboard.writeText(t); b.textContent = "Copied!" } catch { b.textContent = "Gagal copy" }
+      setTimeout(() => b.textContent = "Copy IDs", 1500)
+    });
+  </script>
+</body>
+
+</html>
