@@ -1,0 +1,33 @@
+# Local dev stack with hot reload. Not committed.
+#   Start:            docker compose -f docker-compose.dev.yml up --build
+#   Code edits:       hot reload, no restart or rebuild needed.
+#   New npm dep:      docker compose -f docker-compose.dev.yml up --build
+#                     (the image layer reinstalls node_modules from package.json)
+services:
+  9router-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: 9router-dev:local
+    container_name: 9router-dev
+    ports:
+      - "20128:20128"
+    volumes:
+      # Source tree from the host. The container's node_modules lives in a named
+      # volume so the host folder's node_modules (if any) never shadows it.
+      - .:/app
+      - 9router-dev-node-modules:/app/node_modules
+      - 9router-dev-data:/app/data
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /app/data
+      PORT: "20128"
+      HOSTNAME: "0.0.0.0"
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+    restart: unless-stopped
+
+volumes:
+  9router-dev-data:
+  9router-dev-node-modules:
